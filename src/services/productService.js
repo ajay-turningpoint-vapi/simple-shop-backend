@@ -1,132 +1,251 @@
 const Product = require("../models/Product");
 const ApiError = require("../utils/ApiError");
+const Category = require("../models/Category");
 
 class ProductService {
   async createProduct(productData, userId) {
     productData.user = userId;
+
+    // ✅ Validate category exists
+    const category = await Category.findById(productData.category);
+    if (!category) {
+      throw new ApiError(404, "Category not found");
+    }
+
     const product = await Product.create(productData);
+
+    // Populate category before returning
+    await product.populate("category", "name displayName slug");
+
     return product;
   }
 
-  async getAllProducts(queryParams, userId, userRole) {
-    const {
-      page = 1,
-      limit = 10,
-      search,
-      category,
-      minPrice,
-      maxPrice,
-      sortBy = "createdAt",
-      sortOrder = "desc",
-      brand,
-      inStock,
-      color,
-    } = queryParams;
+  // async getAllProducts(queryParams, userId, userRole) {
+  //   const {
+  //     page = 1,
+  //     limit = 10,
+  //     search,
+  //     category,
+  //     minPrice,
+  //     maxPrice,
+  //     sortBy = "createdAt",
+  //     sortOrder = "desc",
+  //     brand,
+  //     inStock,
+  //     color,
+  //   } = queryParams;
 
-    // Build filter object
-    const filter = {};
+  //   // Build filter object
+  //   const filter = {};
 
-    // If user is not admin, only show their products
-    if (userRole !== "admin") {
-      filter.user = userId;
-    }
+  //   // If user is not admin, only show their products
+  //   if (userRole !== "admin") {
+  //     filter.user = userId;
+  //   }
 
-    // Search functionality
-    if (search) {
-      filter.$text = { $search: search };
-    }
+  //   // Search functionality
+  //   if (search) {
+  //     filter.$text = { $search: search };
+  //   }
 
-    // Category filter
-    if (category) {
-      filter.category = category;
-    }
+  //   // Category filter
+  //   if (category) {
+  //     filter.category = category;
+  //   }
 
-    // Price range filter
-    if (minPrice || maxPrice) {
-      filter.price = {};
-      if (minPrice) filter.price.$gte = Number(minPrice);
-      if (maxPrice) filter.price.$lte = Number(maxPrice);
-    }
+  //   // Price range filter
+  //   if (minPrice || maxPrice) {
+  //     filter.price = {};
+  //     if (minPrice) filter.price.$gte = Number(minPrice);
+  //     if (maxPrice) filter.price.$lte = Number(maxPrice);
+  //   }
 
-    // Brand filter
-    if (brand) {
-      filter.brand = { $regex: brand, $options: "i" };
-    }
+  //   // Brand filter
+  //   if (brand) {
+  //     filter.brand = { $regex: brand, $options: "i" };
+  //   }
 
-    // Color filter - check if any variant has this color
-    if (color) {
-      filter["variants.color"] = { $regex: color, $options: "i" };
-    }
+  //   // Color filter - check if any variant has this color
+  //   if (color) {
+  //     filter["variants.color"] = { $regex: color, $options: "i" };
+  //   }
 
-    // Update getAllProducts method - price filtering
-    if (minPrice || maxPrice) {
-      filter.price = {}; // This is correct - use selling price for filtering
-      if (minPrice) filter.price.$gte = Number(minPrice);
-      if (maxPrice) filter.price.$lte = Number(maxPrice);
-    }
+  //   // Update getAllProducts method - price filtering
+  //   if (minPrice || maxPrice) {
+  //     filter.price = {}; // This is correct - use selling price for filtering
+  //     if (minPrice) filter.price.$gte = Number(minPrice);
+  //     if (maxPrice) filter.price.$lte = Number(maxPrice);
+  //   }
 
-    // Stock filter - check if any variant has stock > 0
-    if (inStock === "true") {
-      filter["variants"] = {
-        $elemMatch: {
-          stock: { $gt: 0 },
-          isAvailable: true,
-        },
-      };
-    }
+  //   // Stock filter - check if any variant has stock > 0
+  //   if (inStock === "true") {
+  //     filter["variants"] = {
+  //       $elemMatch: {
+  //         stock: { $gt: 0 },
+  //         isAvailable: true,
+  //       },
+  //     };
+  //   }
 
-    // Active products only
-    filter.isActive = true;
+  //   // Active products only
+  //   filter.isActive = true;
 
-    // Pagination
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    const skip = (pageNum - 1) * limitNum;
+  //   // Pagination
+  //   const pageNum = parseInt(page, 10);
+  //   const limitNum = parseInt(limit, 10);
+  //   const skip = (pageNum - 1) * limitNum;
 
-    // Sorting
-    const sortOptions = {};
-    sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
+  //   // Sorting
+  //   const sortOptions = {};
+  //   sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
 
-    // Execute query
-    const products = await Product.find(filter)
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(limitNum)
-      .populate("user", "name email");
+  //   // Execute query
+  //   const products = await Product.find(filter)
+  //     .sort(sortOptions)
+  //     .skip(skip)
+  //     .limit(limitNum)
+  //     .populate("user", "name email")
+  //     .populate("category", "name displayName slug icon");
 
-    // Get total count
-    const total = await Product.countDocuments(filter);
+  //   // Get total count
+  //   const total = await Product.countDocuments(filter);
 
-    return {
-      products,
-      pagination: {
-        total,
-        page: pageNum,
-        pages: Math.ceil(total / limitNum),
-        limit: limitNum,
+  //   return {
+  //     products,
+  //     pagination: {
+  //       total,
+  //       page: pageNum,
+  //       pages: Math.ceil(total / limitNum),
+  //       limit: limitNum,
+  //     },
+  //   };
+  // }
+
+  // async getProductById(productId, userId, userRole) {
+  //   const filter = { _id: productId };
+
+  //   // If user is not admin, only allow viewing their own products
+  //   if (userRole !== "admin") {
+  //     filter.user = userId;
+  //   }
+
+  //   const product = await Product.findOne(filter).populate(
+  //     "user",
+  //     "name email"
+  //   );
+
+  //   if (!product) {
+  //     throw new ApiError(404, "Product not found");
+  //   }
+
+  //   return product;
+  // }
+
+
+  async getAllProducts(queryParams) {
+  const {
+    page = 1,
+    limit = 10,
+    search,
+    category,
+    minPrice,
+    maxPrice,
+    sortBy = "createdAt",
+    sortOrder = "desc",
+    brand,
+    inStock,
+    color,
+  } = queryParams;
+
+  const filter = {
+    isActive: true, // PUBLIC: only active products
+  };
+
+  // 🔍 Search (requires text index)
+  if (search) {
+    filter.$text = { $search: search };
+  }
+
+  // 📦 Category filter
+  if (category) {
+    filter.category = category;
+  }
+
+  // 💰 Price range
+  if (minPrice || maxPrice) {
+    filter.price = {};
+    if (minPrice) filter.price.$gte = Number(minPrice);
+    if (maxPrice) filter.price.$lte = Number(maxPrice);
+  }
+
+  // 🏷 Brand filter
+  if (brand) {
+    filter.brand = { $regex: brand, $options: "i" };
+  }
+
+  // 🎨 Variant color filter
+  if (color) {
+    filter["variants.color"] = { $regex: color, $options: "i" };
+  }
+
+  // 📦 In-stock products
+  if (inStock === "true") {
+    filter.variants = {
+      $elemMatch: {
+        stock: { $gt: 0 },
+        isAvailable: true,
       },
     };
   }
 
-  async getProductById(productId, userId, userRole) {
-    const filter = { _id: productId };
+  // 📄 Pagination
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const limitNum = Math.min(100, parseInt(limit, 10));
+  const skip = (pageNum - 1) * limitNum;
 
-    // If user is not admin, only allow viewing their own products
-    if (userRole !== "admin") {
-      filter.user = userId;
-    }
+  // 🔃 Sorting
+  const sortOptions = {
+    [sortBy]: sortOrder === "desc" ? -1 : 1,
+  };
 
-    const product = await Product.findOne(filter).populate(
-      "user",
-      "name email"
-    );
+  // 🚀 Query
+  const products = await Product.find(filter)
+    .sort(sortOptions)
+    .skip(skip)
+    .limit(limitNum)
+    .populate("category", "name displayName slug icon")
+    .lean();
 
-    if (!product) {
-      throw new ApiError(404, "Product not found");
-    }
+  const total = await Product.countDocuments(filter);
 
-    return product;
+  return {
+    products,
+    pagination: {
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum),
+      limit: limitNum,
+    },
+  };
+}
+
+
+async getProductById(productId) {
+  const product = await Product.findOne({
+    _id: productId,
+    isActive: true,
+  })
+    .populate("category", "name displayName slug icon")
+    .populate("user", "name") // optional
+    .lean();
+
+  if (!product) {
+    throw new ApiError(404, "Product not found");
   }
+
+  return product;
+}
+
 
   async updateProduct(productId, updateData, userId, userRole) {
     const filter = { _id: productId };

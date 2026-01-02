@@ -42,27 +42,12 @@ const createProductValidation = [
     .optional()
     .isFloat({ min: 0, max: 100 })
     .withMessage("Discount percent must be between 0 and 100"),
-  body("category")
-    .notEmpty()
-    .withMessage("Category is required")
-    .isIn([
-      "electronics",
-      "clothing",
-      "food",
-      "books",
-      "toys",
-      "sports",
-      "home",
-      "beauty",
-      "automotive",
-      "other",
-    ])
-    .withMessage("Please select a valid category"),
+ body('category')
+  .notEmpty().withMessage('Category is required')
+  .isMongoId().withMessage('Invalid category ID'),  
+
   body("brand").optional().trim(),
-  body("rating")
-    .optional()
-    .isFloat({ min: 0, max: 5 })
-    .withMessage("Rating must be between 0 and 5"),
+  ,
   body("images").optional().isArray().withMessage("Images must be an array"),
   body("tags").optional().isArray().withMessage("Tags must be an array"),
 
@@ -117,26 +102,10 @@ const updateProductValidation = [
     .optional()
     .isFloat({ min: 0, max: 100 })
     .withMessage("Discount percent must be 0-100"),
-  body("category")
-    .optional()
-    .isIn([
-      "electronics",
-      "clothing",
-      "food",
-      "books",
-      "toys",
-      "sports",
-      "home",
-      "beauty",
-      "automotive",
-      "other",
-    ])
-    .withMessage("Please select a valid category"),
-  body("rating")
-    .optional()
-    .isFloat({ min: 0, max: 5 })
-    .withMessage("Rating must be between 0 and 5"),
-
+ body('category')
+    .notEmpty().withMessage('Category is required')
+    .isMongoId().withMessage('Invalid category ID'),
+ 
   // Variants validation
   body("variants")
     .optional()
@@ -174,7 +143,7 @@ const queryValidation = [
     .withMessage("Maximum price must be a positive number"),
   query("sortBy")
     .optional()
-    .isIn(["name", "price", "mrp", "createdAt", "rating"])
+    .isIn(["name", "price", "mrp", "createdAt"])
     .withMessage("Invalid sort field"),
   query("sortOrder")
     .optional()
@@ -194,11 +163,11 @@ router
     validate,
     productController.createProduct
   )
-  .get(protect, queryValidation, validate, productController.getAllProducts);
+  .get( queryValidation, validate, productController.getAllProducts);
 
 router
   .route("/:id")
-  .get(protect, productController.getProductById)
+  .get( productController.getProductById)
   .put(
     protect,
     updateProductValidation,

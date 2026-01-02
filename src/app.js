@@ -7,18 +7,19 @@ const config = require('./config/config');
 const errorHandler = require('./middleware/errorHandler');
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
 const logger = require('./utils/logger');
 
 const app = express();
 
 // Security middleware
-// app.use(helmet());
+app.use(helmet());
 
 // CORS configuration
-// app.use(cors({
-//   origin: config.corsOrigins,
-//   credentials: true
-// }));
+app.use(cors({
+  origin: config.corsOrigins,
+  credentials: true
+}));
 
 // Compression middleware
 app.use(compression());
@@ -49,17 +50,18 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/products', productRoutes);
+app.use('/api/v1/categories', categoryRoutes);
 
 // 404 handler
-// app.use((req, res) => {
-//   res.status(404).json({
-//     success: false,
-//     message: `Route ${req.originalUrl} not found`
-//   });
-// });
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.originalUrl} not found`
+  });
+});
 
 
 // Centralized error handling middleware
-// app.use(errorHandler);
+app.use(errorHandler);
 
 module.exports = app;

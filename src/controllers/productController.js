@@ -17,8 +17,8 @@ exports.createProduct = asyncHandler(async (req, res) => {
 // @route   GET /api/v1/products
 // @access  Private
 exports.getAllProducts = asyncHandler(async (req, res) => {
-  const result = await productService.getAllProducts(req.query, req.user.id, req.user.role);
-
+  // const result = await productService.getAllProducts(req.query, req.user.id, req.user.role);
+ const result = await productService.getAllProducts(req.query);
   res.status(200).json(
     new ApiResponse(200, result, 'Products fetched successfully')
   );
@@ -28,8 +28,8 @@ exports.getAllProducts = asyncHandler(async (req, res) => {
 // @route   GET /api/v1/products/:id
 // @access  Private
 exports.getProductById = asyncHandler(async (req, res) => {
-  const product = await productService.getProductById(req.params.id, req.user.id, req.user.role);
-
+  // const product = await productService.getProductById(req.params.id, req.user.id, req.user.role);
+  const product = await productService.getProductById(req.params.id);
   res.status(200).json(
     new ApiResponse(200, { product }, 'Product fetched successfully')
   );
