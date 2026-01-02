@@ -1,5 +1,6 @@
 const Category = require("../models/Category.js");
 const ApiError = require("../utils/ApiError.js");
+  const cache = require('../utils/cache');
 
 class CategoryService {
   // Create new category
@@ -23,11 +24,19 @@ class CategoryService {
     }
 
     const category = await Category.create(categoryData);
+
+    // Invalidate categories cache
+  
+    await cache.delPattern('categories:*');
+    await cache.set(`category:${category._id}`, category.toObject ? category.toObject() : category, 3600);
+
     return category;
   }
 
   // Get all categories
   async getAllCategories(queryParams) {
+  
+
     const {
       search,
       parentCategory,
@@ -36,6 +45,10 @@ class CategoryService {
       sortBy = "order",
       sortOrder = "asc",
     } = queryParams;
+
+    const cacheKey = `categories:all:${search || ''}:${parentCategory || ''}:${level || ''}:${isActive || ''}:${sortBy}:${sortOrder}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
 
     const filter = {};
 
@@ -58,7 +71,7 @@ class CategoryService {
     if (isActive !== undefined && isActive !== "") {
       filter.isActive = isActive === "true" || isActive === true;
     }
-    console.log("Category Filter:", filter); // ✅ Debug log
+    // console.log("Category Filter:", filter); // removed debug log
 
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
@@ -68,11 +81,17 @@ class CategoryService {
       .populate("parentCategory", "name displayName")
       .populate("subcategories");
 
+    await cache.set(cacheKey, categories, 600);
     return categories;
   }
 
   // Get category by ID
   async getCategoryById(categoryId) {
+  
+    const cacheKey = `category:${categoryId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+
     const category = await Category.findById(categoryId)
       .populate("parentCategory", "name displayName")
       .populate("subcategories");
@@ -81,11 +100,17 @@ class CategoryService {
       throw new ApiError(404, "Category not found");
     }
 
+    await cache.set(cacheKey, category, 3600);
     return category;
   }
 
   // Get category by slug
   async getCategoryBySlug(slug) {
+  
+    const cacheKey = `category:slug:${slug}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+
     const category = await Category.findOne({ slug })
       .populate("parentCategory", "name displayName")
       .populate("subcategories");
@@ -94,6 +119,7 @@ class CategoryService {
       throw new ApiError(404, "Category not found");
     }
 
+    await cache.set(cacheKey, category, 3600);
     return category;
   }
 
@@ -124,6 +150,10 @@ class CategoryService {
       throw new ApiError(404, "Category not found");
     }
 
+  
+    await cache.delPattern('categories:*');
+    await cache.set(`category:${category._id}`, category.toObject ? category.toObject() : category, 3600);
+
     return category;
   }
 
@@ -148,6 +178,11 @@ class CategoryService {
     }
 
     await category.deleteOne();
+
+  
+    await cache.delPattern('categories:*');
+    await cache.del(`category:${categoryId}`);
+
     return { message: "Category deleted successfully" };
   }
 
@@ -158,10 +193,16 @@ class CategoryService {
 
   // Get categories with product counts
   async getCategoriesWithCounts() {
+  
+    const cacheKey = 'categories:counts';
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+
     const categories = await Category.find({ isActive: true })
       .sort({ order: 1 })
       .select("name displayName slug productCount icon image");
 
+    await cache.set(cacheKey, categories, 600);
     return categories;
   }
 }

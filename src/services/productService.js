@@ -1,6 +1,7 @@
 const Product = require("../models/Product");
 const ApiError = require("../utils/ApiError");
 const Category = require("../models/Category");
+const cache = require("../utils/cache");
 
 class ProductService {
   async createProduct(productData, userId) {
@@ -17,234 +18,142 @@ class ProductService {
     // Populate category before returning
     await product.populate("category", "name displayName slug");
 
+
+    // Invalidate product list caches and set the single product cache
+    await cache.delPattern('products:*');
+    await cache.set(`product:${product._id}`, product.toObject ? product.toObject() : product, 3600);
+
     return product;
   }
 
-  // async getAllProducts(queryParams, userId, userRole) {
-  //   const {
-  //     page = 1,
-  //     limit = 10,
-  //     search,
-  //     category,
-  //     minPrice,
-  //     maxPrice,
-  //     sortBy = "createdAt",
-  //     sortOrder = "desc",
-  //     brand,
-  //     inStock,
-  //     color,
-  //   } = queryParams;
 
-  //   // Build filter object
-  //   const filter = {};
-
-  //   // If user is not admin, only show their products
-  //   if (userRole !== "admin") {
-  //     filter.user = userId;
-  //   }
-
-  //   // Search functionality
-  //   if (search) {
-  //     filter.$text = { $search: search };
-  //   }
-
-  //   // Category filter
-  //   if (category) {
-  //     filter.category = category;
-  //   }
-
-  //   // Price range filter
-  //   if (minPrice || maxPrice) {
-  //     filter.price = {};
-  //     if (minPrice) filter.price.$gte = Number(minPrice);
-  //     if (maxPrice) filter.price.$lte = Number(maxPrice);
-  //   }
-
-  //   // Brand filter
-  //   if (brand) {
-  //     filter.brand = { $regex: brand, $options: "i" };
-  //   }
-
-  //   // Color filter - check if any variant has this color
-  //   if (color) {
-  //     filter["variants.color"] = { $regex: color, $options: "i" };
-  //   }
-
-  //   // Update getAllProducts method - price filtering
-  //   if (minPrice || maxPrice) {
-  //     filter.price = {}; // This is correct - use selling price for filtering
-  //     if (minPrice) filter.price.$gte = Number(minPrice);
-  //     if (maxPrice) filter.price.$lte = Number(maxPrice);
-  //   }
-
-  //   // Stock filter - check if any variant has stock > 0
-  //   if (inStock === "true") {
-  //     filter["variants"] = {
-  //       $elemMatch: {
-  //         stock: { $gt: 0 },
-  //         isAvailable: true,
-  //       },
-  //     };
-  //   }
-
-  //   // Active products only
-  //   filter.isActive = true;
-
-  //   // Pagination
-  //   const pageNum = parseInt(page, 10);
-  //   const limitNum = parseInt(limit, 10);
-  //   const skip = (pageNum - 1) * limitNum;
-
-  //   // Sorting
-  //   const sortOptions = {};
-  //   sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
-
-  //   // Execute query
-  //   const products = await Product.find(filter)
-  //     .sort(sortOptions)
-  //     .skip(skip)
-  //     .limit(limitNum)
-  //     .populate("user", "name email")
-  //     .populate("category", "name displayName slug icon");
-
-  //   // Get total count
-  //   const total = await Product.countDocuments(filter);
-
-  //   return {
-  //     products,
-  //     pagination: {
-  //       total,
-  //       page: pageNum,
-  //       pages: Math.ceil(total / limitNum),
-  //       limit: limitNum,
-  //     },
-  //   };
-  // }
-
-  // async getProductById(productId, userId, userRole) {
-  //   const filter = { _id: productId };
-
-  //   // If user is not admin, only allow viewing their own products
-  //   if (userRole !== "admin") {
-  //     filter.user = userId;
-  //   }
-
-  //   const product = await Product.findOne(filter).populate(
-  //     "user",
-  //     "name email"
-  //   );
-
-  //   if (!product) {
-  //     throw new ApiError(404, "Product not found");
-  //   }
-
-  //   return product;
-  // }
 
 
   async getAllProducts(queryParams) {
-  const {
-    page = 1,
-    limit = 10,
-    search,
-    category,
-    minPrice,
-    maxPrice,
-    sortBy = "createdAt",
-    sortOrder = "desc",
-    brand,
-    inStock,
-    color,
-  } = queryParams;
 
-  const filter = {
-    isActive: true, // PUBLIC: only active products
-  };
 
-  // 🔍 Search (requires text index)
-  if (search) {
-    filter.$text = { $search: search };
-  }
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      category,
+      minPrice,
+      maxPrice,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      brand,
+      inStock,
+      color,
+    } = queryParams;
 
-  // 📦 Category filter
-  if (category) {
-    filter.category = category;
-  }
+    // Deterministic cache key
+    const cacheKey = `products:${page}:${limit}:${search || ''}:${category || ''}:${minPrice || ''}:${maxPrice || ''}:${sortBy}:${sortOrder}:${brand || ''}:${inStock || ''}:${color || ''}`;
 
-  // 💰 Price range
-  if (minPrice || maxPrice) {
-    filter.price = {};
-    if (minPrice) filter.price.$gte = Number(minPrice);
-    if (maxPrice) filter.price.$lte = Number(maxPrice);
-  }
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
 
-  // 🏷 Brand filter
-  if (brand) {
-    filter.brand = { $regex: brand, $options: "i" };
-  }
+    console.log("cached",cached);
+    
 
-  // 🎨 Variant color filter
-  if (color) {
-    filter["variants.color"] = { $regex: color, $options: "i" };
-  }
+    const filter = {
+      isActive: true, // PUBLIC: only active products
+    };
 
-  // 📦 In-stock products
-  if (inStock === "true") {
-    filter.variants = {
-      $elemMatch: {
-        stock: { $gt: 0 },
-        isAvailable: true,
+    // 🔍 Search (requires text index)
+    if (search) {
+      filter.$text = { $search: search };
+    }
+
+    // 📦 Category filter
+    if (category) {
+      filter.category = category;
+    }
+
+    // 💰 Price range
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
+    }
+
+    // 🏷 Brand filter
+    if (brand) {
+      filter.brand = { $regex: brand, $options: "i" };
+    }
+
+    // 🎨 Variant color filter
+    if (color) {
+      filter["variants.color"] = { $regex: color, $options: "i" };
+    }
+
+    // 📦 In-stock products
+    if (inStock === "true") {
+      filter.variants = {
+        $elemMatch: {
+          stock: { $gt: 0 },
+          isAvailable: true,
+        },
+      };
+    }
+
+    // 📄 Pagination
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(100, parseInt(limit, 10));
+    const skip = (pageNum - 1) * limitNum;
+
+    // 🔃 Sorting
+    const sortOptions = {
+      [sortBy]: sortOrder === "desc" ? -1 : 1,
+    };
+
+    // 🚀 Query
+    const products = await Product.find(filter)
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNum)
+      .populate("category", "name displayName slug icon")
+      .lean();
+
+    const total = await Product.countDocuments(filter);
+
+    const result = {
+      products,
+      pagination: {
+        total,
+        page: pageNum,
+        pages: Math.ceil(total / limitNum),
+        limit: limitNum,
       },
     };
+
+    // Cache result (short TTL)
+    await cache.set(cacheKey, result, 300);
+
+    return result;
   }
 
-  // 📄 Pagination
-  const pageNum = Math.max(1, parseInt(page, 10));
-  const limitNum = Math.min(100, parseInt(limit, 10));
-  const skip = (pageNum - 1) * limitNum;
 
-  // 🔃 Sorting
-  const sortOptions = {
-    [sortBy]: sortOrder === "desc" ? -1 : 1,
-  };
+  async getProductById(productId) {
 
-  // 🚀 Query
-  const products = await Product.find(filter)
-    .sort(sortOptions)
-    .skip(skip)
-    .limit(limitNum)
-    .populate("category", "name displayName slug icon")
-    .lean();
+    const cacheKey = `product:${productId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
 
-  const total = await Product.countDocuments(filter);
+    const product = await Product.findOne({
+      _id: productId,
+      isActive: true,
+    })
+      .populate("category", "name displayName slug icon")
+      .populate("user", "name") // optional
+      .lean();
 
-  return {
-    products,
-    pagination: {
-      total,
-      page: pageNum,
-      pages: Math.ceil(total / limitNum),
-      limit: limitNum,
-    },
-  };
-}
+    if (!product) {
+      throw new ApiError(404, "Product not found");
+    }
 
-
-async getProductById(productId) {
-  const product = await Product.findOne({
-    _id: productId,
-    isActive: true,
-  })
-    .populate("category", "name displayName slug icon")
-    .populate("user", "name") // optional
-    .lean();
-
-  if (!product) {
-    throw new ApiError(404, "Product not found");
+    await cache.set(cacheKey, product, 3600);
+    return product;
   }
-
-  return product;
-}
 
 
   async updateProduct(productId, updateData, userId, userRole) {
@@ -265,6 +174,11 @@ async getProductById(productId) {
       throw new ApiError(404, "Product not found or unauthorized");
     }
 
+
+    // Invalidate listings and update product cache
+    await cache.delPattern('products:*');
+    await cache.set(`product:${product._id}`, product.toObject ? product.toObject() : product, 3600);
+
     return product;
   }
 
@@ -281,6 +195,10 @@ async getProductById(productId) {
     if (!product) {
       throw new ApiError(404, "Product not found or unauthorized");
     }
+
+
+    await cache.delPattern('products:*');
+    await cache.del(`product:${product._id}`);
 
     return { message: "Product deleted successfully" };
   }
@@ -376,6 +294,10 @@ async getProductById(productId) {
 
     variant.stock = newStock;
     await product.save();
+
+
+    await cache.delPattern('products:*');
+    await cache.set(`product:${product._id}`, product.toObject ? product.toObject() : product, 3600);
 
     return product;
   }
