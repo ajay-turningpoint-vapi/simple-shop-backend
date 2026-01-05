@@ -42,13 +42,17 @@ const createProductValidation = [
     .optional()
     .isFloat({ min: 0, max: 100 })
     .withMessage("Discount percent must be between 0 and 100"),
- body('category')
-  .notEmpty().withMessage('Category is required')
-  .isMongoId().withMessage('Invalid category ID'),  
+  body('category')
+    .notEmpty().withMessage('Category is required')
+    .isMongoId().withMessage('Invalid category ID'),
 
   body("brand").optional().trim(),
   ,
-  body("images").optional().isArray().withMessage("Images must be an array"),
+  body("images").optional().custom((value) => {
+    if (Array.isArray(value)) return true;
+    if (typeof value === 'string') return true; // allow JSON or single URL strings; service will normalize
+    throw new Error('Images must be an array or JSON/string');
+  }).withMessage("Images must be an array or JSON string"),
   body("tags").optional().isArray().withMessage("Tags must be an array"),
 
   // Variants validation
@@ -69,8 +73,12 @@ const createProductValidation = [
   body("variants.*.sku").optional().trim(),
   body("variants.*.images")
     .optional()
-    .isArray()
-    .withMessage("Variant images must be an array"),
+    .custom((value) => {
+      if (Array.isArray(value)) return true;
+      if (typeof value === 'string') return true;
+      throw new Error('Variant images must be an array or JSON/string');
+    })
+    .withMessage("Variant images must be an array or JSON string"),
 ];
 
 const updateProductValidation = [
@@ -102,10 +110,10 @@ const updateProductValidation = [
     .optional()
     .isFloat({ min: 0, max: 100 })
     .withMessage("Discount percent must be 0-100"),
- body('category')
+  body('category')
     .notEmpty().withMessage('Category is required')
     .isMongoId().withMessage('Invalid category ID'),
- 
+
   // Variants validation
   body("variants")
     .optional()
@@ -163,11 +171,11 @@ router
     validate,
     productController.createProduct
   )
-  .get( queryValidation, validate, productController.getAllProducts);
+  .get(queryValidation, validate, productController.getAllProducts);
 
 router
   .route("/:id")
-  .get( productController.getProductById)
+  .get(productController.getProductById)
   .put(
     protect,
     updateProductValidation,

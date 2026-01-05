@@ -27,7 +27,17 @@ const categorySchema = new mongoose.Schema(
       maxlength: [500, 'Description cannot exceed 500 characters'],
     },
     image: {
-      type: String, // Category image URL
+      filename: { type: String },
+      detail: {
+        filename: { type: String },
+        url: { type: String },
+      },
+      thumb: {
+        filename: { type: String },
+        url: { type: String },
+      },
+      alt: { type: String, default: '' },
+      uploadedAt: { type: Date, default: Date.now },
     },
     icon: {
       type: String, // Icon name or URL
@@ -49,7 +59,7 @@ const categorySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    meta :{
+    meta: {
       type: Map,
       of: String, // For additional data like SEO, filters, etc.
     },
@@ -100,7 +110,7 @@ categorySchema.statics.getCategoryTree = async function () {
   const categories = await this.find({ isActive: true })
     .sort({ order: 1 })
     .populate('subcategories');
-  
+
   // Build tree structure
   const tree = categories.filter(cat => !cat.parentCategory);
   return tree;

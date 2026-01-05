@@ -4,8 +4,95 @@ const Category = require("../models/Category");
 const cache = require("../utils/cache");
 
 class ProductService {
+  normalizeImagesArray(images) {
+    if (!images) return images;
+
+    // Helper: extract URLs from arbitrary string
+    function extractUrls(str) {
+      const re = /https?:\/\/[^\s'"\)\],}]+/g;
+      const matches = str.match(re);
+      return matches || [];
+    }
+
+    // Accept string input: JSON array string or single URL string
+    let arr = images;
+    if (typeof arr === 'string') {
+      const trimmed = arr.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try {
+          arr = JSON.parse(trimmed);
+        } catch (err) {
+          // Try to be tolerant: extract URLs from the string
+          const urls = extractUrls(trimmed);
+          if (urls.length) {
+            arr = urls;
+          } else {
+            // fall back to treating as single URL string
+            arr = [trimmed];
+          }
+        }
+      } else {
+        // single URL / filename string
+        arr = [trimmed];
+      }
+    }
+
+    if (!Array.isArray(arr)) {
+      throw new ApiError(400, 'Images must be an array or a JSON array string');
+    }
+
+    // If array elements are a single malformed long string, try to extract URLs from it
+    if (arr.length === 1 && typeof arr[0] === 'string') {
+      const urls = extractUrls(arr[0]);
+      if (urls.length > 1) arr = urls;
+    }
+
+    return arr
+      .map((img) => {
+        // Legacy string URL
+        if (typeof img === 'string') {
+          const filename = img.split('/').pop();
+          return {
+            filename,
+            detail: { filename, url: img },
+            thumb: { filename, url: img },
+            uploadedAt: new Date(),
+          };
+        }
+
+        // Already structured - ensure keys exist
+        const normalized = Object.assign({ alt: '', isPrimary: false, uploadedAt: new Date() }, img);
+
+        if (normalized.detail && typeof normalized.detail === 'string') {
+          normalized.detail = { filename: normalized.detail.split('/').pop(), url: normalized.detail };
+        } else if (normalized.detail && normalized.detail.url && !normalized.detail.filename) {
+          normalized.detail.filename = normalized.detail.url.split('/').pop();
+        }
+
+        if (normalized.thumb && typeof normalized.thumb === 'string') {
+          normalized.thumb = { filename: normalized.thumb.split('/').pop(), url: normalized.thumb };
+        } else if (normalized.thumb && normalized.thumb.url && !normalized.thumb.filename) {
+          normalized.thumb.filename = normalized.thumb.url.split('/').pop();
+        }
+
+        return normalized;
+      })
+      .filter(Boolean);
+  }
+
   async createProduct(productData, userId) {
     productData.user = userId;
+
+    // Normalize images if present (backwards compatible with string array)
+    if (productData.images) {
+      productData.images = this.normalizeImagesArray(productData.images);
+    }
+    if (productData.variants && Array.isArray(productData.variants)) {
+      productData.variants = productData.variants.map((v) => {
+        if (v.images) v.images = this.normalizeImagesArray(v.images);
+        return v;
+      });
+    }
 
     // ✅ Validate category exists
     const category = await Category.findById(productData.category);
@@ -52,8 +139,8 @@ class ProductService {
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
 
-    console.log("cached",cached);
-    
+    console.log("cached", cached);
+
 
     const filter = {
       isActive: true, // PUBLIC: only active products
@@ -162,6 +249,17 @@ class ProductService {
     // If user is not admin, only allow updating their own products
     if (userRole !== "admin") {
       filter.user = userId;
+    }
+
+    // Normalize images in update data if present
+    if (updateData.images) {
+      updateData.images = this.normalizeImagesArray(updateData.images);
+    }
+    if (updateData.variants && Array.isArray(updateData.variants)) {
+      updateData.variants = updateData.variants.map((v) => {
+        if (v.images) v.images = this.normalizeImagesArray(v.images);
+        return v;
+      });
     }
 
     const product = await Product.findOneAndUpdate(

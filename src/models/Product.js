@@ -47,7 +47,18 @@ const productSchema = new mongoose.Schema(
     },
     images: [
       {
-        type: String,
+        filename: { type: String },
+        detail: {
+          filename: { type: String },
+          url: { type: String },
+        },
+        thumb: {
+          filename: { type: String },
+          url: { type: String },
+        },
+        alt: { type: String, default: '' },
+        isPrimary: { type: Boolean, default: false },
+        uploadedAt: { type: Date, default: Date.now },
       },
     ],
 
@@ -71,7 +82,18 @@ const productSchema = new mongoose.Schema(
         },
         images: [
           {
-            type: String,
+            filename: { type: String },
+            detail: {
+              filename: { type: String },
+              url: { type: String },
+            },
+            thumb: {
+              filename: { type: String },
+              url: { type: String },
+            },
+            alt: { type: String, default: '' },
+            isPrimary: { type: Boolean, default: false },
+            uploadedAt: { type: Date, default: Date.now },
           },
         ],
         sku: {
@@ -159,7 +181,7 @@ productSchema.methods.getVariantStockStatus = function (color) {
 };
 
 
-productSchema.post('save', async function() {
+productSchema.post('save', async function () {
   const Category = mongoose.model('Category');
   await Category.findByIdAndUpdate(this.category, {
     $inc: { productCount: 1 }
@@ -167,7 +189,7 @@ productSchema.post('save', async function() {
 });
 
 
-productSchema.post('remove', async function() {
+productSchema.post('remove', async function () {
   const Category = mongoose.model('Category');
   await Category.findByIdAndUpdate(this.category, {
     $inc: { productCount: -1 }

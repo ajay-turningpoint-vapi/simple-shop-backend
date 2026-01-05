@@ -11,7 +11,23 @@ Behavior
 - Validates S3 configuration (AWS_REGION and AWS_S3_BUCKET_NAME required)
 - Accepts common image MIME types (jpeg, png, webp)
 - Converts and stores images as WebP (quality 80)
-- Returns per-file results: `{ ok: true, url, filename, originalName }` on success or `{ ok: false, error, originalName }` on failure
+- Generates two variants per image: `detail` (1200×1200 max, WebP quality ~80) and `thumb` (400×400, WebP quality ~80)
+- Returns per-file results: `{ ok: true, originalName, detail: { filename, url, reused }, thumb: { filename, url, reused } }` on success or `{ ok: false, error, originalName }` on failure
+
+Example response (200):
+
+```
+{
+  "results": [
+    {
+      "ok": true,
+      "originalName": "shirt.png",
+      "detail": { "filename": "abcd1234-detail.webp", "url": "https://.../abcd1234-detail.webp", "reused": false },
+      "thumb": { "filename": "abcd1234-thumb.webp", "url": "https://.../abcd1234-thumb.webp", "reused": false }
+    }
+  ]
+}
+```
 - Partial success returns HTTP 207 with results
 
 Notes

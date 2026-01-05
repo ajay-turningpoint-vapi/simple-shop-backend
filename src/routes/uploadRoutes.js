@@ -49,31 +49,38 @@ router.post('/', upload.array('images'), async (req, res) => {
                         };
                     }
 
-                    let image = sharp(file.buffer).webp({ quality: 80 });
-
-                    if (width || height) {
-                        image = image.resize(width || null, height || null, {
-                            fit: 'inside',
-                        });
-                    }
-
-                    const buffer = await image.toBuffer();
-
-                    // Deduplicate by original content + resize params: use SHA256 of original buffer and include size in filename
+                    // Generate two variants: detail (1200x1200) and thumb (400x400)
                     const origHash = crypto.createHash('sha256').update(file.buffer).digest('hex');
-                    const sizeTag = (width || height) ? `-w${width || ''}h${height || ''}` : '';
-                    const filename = `${origHash}${sizeTag}.webp`;
 
-                    // If object exists in S3, reuse it
-                    const exists = await objectExists(filename);
-                    if (exists) {
-                        const url = getUrlForKey(filename);
-                        return { ok: true, url, filename, originalName: file.originalname, reused: true };
+                    async function processVariant({ width, height, tag }) {
+                        // Resize & convert to WebP quality ~80
+                        let img = sharp(file.buffer).webp({ quality: 80 });
+                        img = img.resize(width, height, { fit: 'inside' });
+                        const buf = await img.toBuffer();
+
+                        const filename = `${origHash}-${tag}.webp`;
+
+                        const exists = await objectExists(filename);
+                        if (exists) {
+                            const url = getUrlForKey(filename);
+                            return { filename, url, reused: true };
+                        }
+
+                        const url = await uploadToS3({ Key: filename, Body: buf, ContentType: 'image/webp' });
+                        return { filename, url, reused: false };
                     }
 
-                    const url = await uploadToS3({ Key: filename, Body: buffer, ContentType: 'image/webp' });
+                    const [detail, thumb] = await Promise.all([
+                        processVariant({ width: 1200, height: 1200, tag: 'detail' }),
+                        processVariant({ width: 400, height: 400, tag: 'thumb' }),
+                    ]);
 
-                    return { ok: true, url, filename, originalName: file.originalname, reused: false };
+                    return {
+                        ok: true,
+                        originalName: file.originalname,
+                        detail,
+                        thumb,
+                    };
                 } catch (err) {
                     logger.error('File upload failed', err);
                     return {
