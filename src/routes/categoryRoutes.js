@@ -20,17 +20,25 @@ const createCategoryValidation = [
     .optional()
     .isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
   body('parentCategory')
-    .optional()
-    .isMongoId().withMessage('Invalid parent category ID'),
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true;
+      }
+      return require('mongoose').Types.ObjectId.isValid(value);
+    })
+    .withMessage('Invalid parent category ID'),
   body('order')
     .optional()
     .isInt({ min: 0 }).withMessage('Order must be a positive integer'),
   body('icon')
     .optional()
     .trim(),
-  body('image')
-    .optional()
-    .trim(),
+  body("images").optional().custom((value) => {
+    if (Array.isArray(value)) return true;
+    if (typeof value === 'string') return true; // allow JSON or single URL strings; service will normalize
+    throw new Error('Images must be an array or JSON/string');
+  }).withMessage("Images must be an array or JSON string"),
 ];
 
 const updateCategoryValidation = [
@@ -46,8 +54,14 @@ const updateCategoryValidation = [
     .optional()
     .isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
   body('parentCategory')
-    .optional()
-    .isMongoId().withMessage('Invalid parent category ID'),
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true;
+      }
+      return require('mongoose').Types.ObjectId.isValid(value);
+    })
+    .withMessage('Invalid parent category ID'),
   body('order')
     .optional()
     .isInt({ min: 0 }).withMessage('Order must be a positive integer'),
